@@ -12,6 +12,8 @@
 (define-constant ERR-ROUND-NOT-ACTIVE (err u412))
 (define-constant ERR-ALREADY-RECEIVED-PAYOUT (err u413))
 (define-constant ERR-INSUFFICIENT-CONTRIBUTIONS (err u414))
+(define-constant ERR-NO-FUNDS-TO-WITHDRAW (err u415))
+(define-constant WITHDRAWAL-PENALTY-PERCENT u20)
 
 (define-data-var next-circle-id uint u1)
 (define-data-var next-round-id uint u1)
@@ -117,6 +119,28 @@
 
 (define-read-only (get-next-round-id)
   (var-get next-round-id)
+)
+
+(define-read-only (calculate-withdrawal-amount
+    (circle-id uint)
+    (member principal)
+  )
+  (let ((member-info (get-circle-member circle-id member)))
+    (match member-info
+      member-data (let (
+          (total-contrib (get total-contributed member-data))
+          (penalty (/ (* total-contrib WITHDRAWAL-PENALTY-PERCENT) u100))
+          (withdrawal-amt (- total-contrib penalty))
+        )
+        (ok {
+          total-contributed: total-contrib,
+          penalty: penalty,
+          withdrawal-amount: withdrawal-amt,
+        })
+      )
+      ERR-NOT-MEMBER
+    )
+  )
 )
 
 (define-public (create-circle
@@ -312,5 +336,35 @@
     (asserts! (get is-active circle) ERR-CIRCLE-NOT-ACTIVE)
     (map-set circles { circle-id: circle-id } (merge circle { is-active: false }))
     (ok true)
+  )
+)
+
+(define-public (emergency-withdraw (circle-id uint))
+  (let (
+      (circle (unwrap! (get-circle circle-id) ERR-NOT-FOUND))
+      (member-info (unwrap! (get-circle-member circle-id tx-sender) ERR-NOT-MEMBER))
+      (total-contrib (get total-contributed member-info))
+      (penalty (/ (* total-contrib WITHDRAWAL-PENALTY-PERCENT) u100))
+      (withdrawal-amt (- total-contrib penalty))
+    )
+    (asserts! (get is-active circle) ERR-CIRCLE-NOT-ACTIVE)
+    (asserts! (> total-contrib u0) ERR-NO-FUNDS-TO-WITHDRAW)
+    (asserts! (not (get has-received-payout member-info))
+      ERR-ALREADY-RECEIVED-PAYOUT
+    )
+    (try! (as-contract (stx-transfer? withdrawal-amt tx-sender tx-sender)))
+    (map-set circle-members {
+      circle-id: circle-id,
+      member: tx-sender,
+    }
+      (merge member-info {
+        has-received-payout: true,
+        total-contributed: u0,
+      })
+    )
+    (ok {
+      withdrawn: withdrawal-amt,
+      penalty: penalty,
+    })
   )
 )
