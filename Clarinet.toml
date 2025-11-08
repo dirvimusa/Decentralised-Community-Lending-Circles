@@ -1,0 +1,27 @@
+[project]
+name = 'Decentralised-Community-Lending-Circles'
+description = ''
+authors = []
+telemetry = true
+cache_dir = '.\.cache'
+requirements = []
+[contracts.Decentralised-Community-Lending-Circles]
+path = 'contracts/Decentralised-Community-Lending-Circles.clar'
+clarity_version = 2
+epoch = 2.1
+[contracts.devx-asserts]
+path = 'contracts/devx-asserts.clar'
+clarity_version = 2
+epoch = 2.1
+[repl.analysis]
+passes = ['check_checker']
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false
+
+[repl.remote_data]
+enabled = false
+api_url = 'https://api.hiro.so'
